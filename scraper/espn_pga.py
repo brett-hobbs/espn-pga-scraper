@@ -1,28 +1,39 @@
 from lxml import html
 import requests
 
-INDEX_NAME = 2
-INDEX_STATUS = 3
-INDEX_ROUND_1 = 4
-INDEX_ROUND_2 = 5
-INDEX_ROUND_3 = 6
-INDEX_ROUND_4 = 7
+INDEX_NAME = 3
+INDEX_STATUS = 6
+INDEX_ROUND_1 = 7
+INDEX_ROUND_2 = 8
+INDEX_ROUND_3 = 9
+INDEX_ROUND_4 = 10
 
 # Process the raw status field to see if the golfer was cut
 # or what hole they are on.
-# return (cut, holes_completed)
+# returns (cut, incomplete_holes)
 def process_status(status):
-  past_holes = 54
   # Cut after 36 holes
-  if status == 'CUT':
-    return (True, 36)
+  if status == 'CUT' or status == 'WD':
+    return (True, 0)
   # +2, E, -4 are all end of round scores.
-  elif (status == 'E' or '+' in status or '-' in status):
-    return (False, past_holes + 18)
+  elif (status == 'F' or '+' in status or '-' in status):
+    return (False, 0)
   # Otherwise its a hole count for the day.
   else:
     hole_count = int(status)
-    return (False, past_holes + hole_count)
+    return (False, 18 - hole_count)
+
+# Based on round scores and incomplete hole count
+# caluculate total holes.
+# returns total_hole_count
+def calculate_hole_count(rounds, incomplete_hole_count);
+  hole_count = 72
+  for score in rounds:
+    if score == '-':
+      hole_count -= 18
+  hole_count -= incomplete_hole_count
+  return hole_count
+
 
 page = requests.get('http://espn.go.com/golf/leaderboard')
 tree = html.fromstring(page.text)
@@ -31,12 +42,14 @@ tree = html.fromstring(page.text)
 golfer_element_list = tree.get_element_by_id('regular-leaderboard').find_class('tablehead leaderboard')[0].find_class('sl')
 for element in golfer_element_list:
   item_list = element.findall('td')
+  name = item_list[INDEX_NAME].text_content()
   status = '%s' % item_list[INDEX_STATUS].text_content()
-  cut, hole_count = process_status(status)
-  print item_list[INDEX_NAME].text_content()
-  print 'Cut: %s' % cut
-  print 'Hole Count: %d' % hole_count
-  print item_list[INDEX_ROUND_1].text_content()
-  print item_list[INDEX_ROUND_2].text_content()
-  print item_list[INDEX_ROUND_3].text_content()
-  print item_list[INDEX_ROUND_4].text_content()
+  cut, incomplete_hole_count = process_status(status)
+  rounds = [
+    item_list[INDEX_ROUND_1].text_content(),
+    item_list[INDEX_ROUND_2].text_content(),
+    item_list[INDEX_ROUND_3].text_content(),
+    item_list[INDEX_ROUND_4].text_content(),
+    ];
+  hole_count = calculate_hole_count(rounds, incomplete_hole_count)
+  print '%s Cut: %s Holes: %d Rounds: %d %d %d %d' % (name, cut, hole_count, rounds[0], rounds[1], rounds[2], rounds[3])
