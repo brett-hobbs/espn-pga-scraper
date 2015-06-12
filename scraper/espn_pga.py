@@ -1,5 +1,6 @@
 from lxml import html
 import requests
+import collections
 
 INDEX_NAME = 3
 INDEX_TO_PAR = 4
@@ -8,6 +9,8 @@ INDEX_ROUND_1 = 7
 INDEX_ROUND_2 = 8
 INDEX_ROUND_3 = 9
 INDEX_ROUND_4 = 10
+
+Stats = collections.namedtuple('Stats', ('name', 'score_to_par', 'cut', 'holes', 'rounds'))
 
 # Process the raw status field to see if the golfer was cut
 # or what hole they are on.
@@ -55,19 +58,26 @@ tree = html.fromstring(page.text)
 golfer_element_list = tree.get_element_by_id('regular-leaderboard').find_class('tablehead leaderboard')[0].find_class('sl')
 for element in golfer_element_list:
   item_list = element.findall('td')
-  name = item_list[INDEX_NAME].text_content()
-  score_to_par = process_score(item_list[INDEX_TO_PAR].text_content())
-  status = '%s' % item_list[INDEX_STATUS].text_content()
+
   # Remove withdrawn goilfers.
+  status = '%s' % item_list[INDEX_STATUS].text_content()
   if (status == 'WD'):
     continue
+
   cut, incomplete_hole_count = process_status(status)
   rounds = [
     item_list[INDEX_ROUND_1].text_content(),
     item_list[INDEX_ROUND_2].text_content(),
     item_list[INDEX_ROUND_3].text_content(),
     item_list[INDEX_ROUND_4].text_content(),
-    ];
-  hole_count = calculate_hole_count(rounds, incomplete_hole_count)
-  print '%s Cut: %s Holes: %d Score: %d' % (name, cut, hole_count, score_to_par)
-  print 'Rounds: %s %s %s %s' % (rounds[0], rounds[1], rounds[2], rounds[3])
+  ]
+
+  stats = Stats(
+    name=item_list[INDEX_NAME].text_content(),
+    score_to_par=process_score(item_list[INDEX_TO_PAR].text_content()),
+    cut=cut,
+    holes=calculate_hole_count(rounds, incomplete_hole_count),
+    rounds=[round if round != '-' else '' for round in rounds]
+  )
+  print '%s Cut: %s Holes: %d Score: %d' % (stats.name, stats.cut, stats.holes, stats.score_to_par)
+  print 'Rounds: %s %s %s %s' % (stats.rounds[0], stats.rounds[1], stats.rounds[2], stats.rounds[3])
