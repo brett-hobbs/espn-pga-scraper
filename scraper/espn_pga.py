@@ -30,6 +30,7 @@ if args.tournament_state == 'before':
 elif args.tournament_state == 'during':
   INDEX_NAME = 3
   INDEX_TO_PAR = 4
+  INDEX_TODAY_TO_PAR = 5
   INDEX_STATUS =  6
   INDEX_ROUND_1 = 7
   INDEX_ROUND_2 = 8
@@ -47,18 +48,19 @@ elif args.tournament_state == 'after':
 # Prod vs Dev column ids.
 COL_IDS = {
   'name':    'c-Iwp7VTcuGg' if args.prod else 'c-gkJ7VUzTIw',
+  'score':   'c-Iwp7VZEJLQ' if args.prod else 'c-gkJ7VeyP9A',
+  'holes':   'c-Wwp7VQa06w' if args.prod else 'c-gkJ7Vb3NbA',
+  'round1':  'c-Iwp7VQEGhQ' if args.prod else 'c-gkJ7Vez0Pg',
+  'round2':  'c-Iwp7Vb0QHQ' if args.prod else 'c-MbWAVWipYw',
+  'round3':  'c-Uwp7VWjnNQ' if args.prod else 'c-M7WAVfnU9A',
+  'round4':  'c-Vgp7VWLxIA' if args.prod else 'c-N7WAVbeoZg',
   'cut':     'c-WQp7Vd5REQ' if args.prod else 'c-gkJ7VUvwng',
-  'holes' :  'c-Wwp7VQa06w' if args.prod else 'c-gkJ7Vb3NbA',
-  'score' :  'c-Iwp7VZEJLQ' if args.prod else 'c-gkJ7VeyP9A',
-  'round1' : 'c-Iwp7VQEGhQ' if args.prod else 'c-gkJ7Vez0Pg',
-  'round2' : 'c-Iwp7Vb0QHQ' if args.prod else 'c-MbWAVWipYw',
-  'round3' : 'c-Uwp7VWjnNQ' if args.prod else 'c-M7WAVfnU9A',
-  'round4' : 'c-Vgp7VWLxIA' if args.prod else 'c-N7WAVbeoZg',
+  'cut_adj': 'c-QT2EVYGDlw',
 }
 
 ESPN_URL = 'http://espn.go.com/golf/leaderboard'
 
-Stats = collections.namedtuple('Stats', ('name', 'score_to_par', 'cut', 'holes', 'rounds'))
+Stats = collections.namedtuple('Stats', ('name', 'score_to_par', 'today_to_par', 'cut', 'holes', 'rounds'))
 
 # Process the raw status field to see if the golfer was cut
 # or what hole they are on.
@@ -84,11 +86,9 @@ def process_status(status):
 def process_score(raw_score):
   # Cut after 36 holes
   if raw_score == 'CUT':
-    return
+    return 0
   elif raw_score == 'E' or raw_score == '-':
     return 0
-  elif '-' in raw_score:
-    return int(raw_score)
   else:
     return int(raw_score)
 
@@ -109,8 +109,9 @@ def get_stats(item_list):
   cut, incomplete_hole_count = process_status(status)
   rounds = [0, 0, 0, 0]
   score_to_par = ''
+  today_to_par = 0
   if args.tournament_state != 'before':
-    score_to_par = process_score(item_list[INDEX_TO_PAR].text_content()),
+    score_to_par = process_score(item_list[INDEX_TO_PAR].text_content())
     rounds = [
       item_list[INDEX_ROUND_1].text_content(),
       item_list[INDEX_ROUND_2].text_content(),
@@ -118,31 +119,40 @@ def get_stats(item_list):
       item_list[INDEX_ROUND_4].text_content(),
     ]
     rounds=[int(round) if round != '-' else 0 for round in rounds]
-
+  if args.tournament_state == 'during':
+    today_to_par = process_score(item_list[INDEX_TODAY_TO_PAR].text_content())
   return Stats(
     name=item_list[INDEX_NAME].text_content(),
     score_to_par=score_to_par,
+    today_to_par=today_to_par,
     cut=cut,
     holes=calculate_hole_count(rounds, incomplete_hole_count),
-    rounds=rounds
+    rounds=rounds,
   )
 
 ## Start the script.
 page = requests.get(ESPN_URL)
 tree = html.fromstring(page.text)
 
-# Get the list of golfers.
+# Scrape raw stats for all golfers.
 golfer_element_list = tree.get_element_by_id('regular-leaderboard').find_class('tablehead leaderboard')[0].find_class('sl')
+full_stats = []
 for element in golfer_element_list:
   item_list = element.findall('td')
 
   # Remove withdrawn goilfers.
   status = '%s' % item_list[INDEX_STATUS].text_content()
-  if (status == 'WD'):
+  if (status == 'WD' or status == 'CUT'):
     continue
 
   stats = get_stats(item_list)
+  full_stats.append(stats)
 
+# Proccess stats for users who have been cut.
+worst_of_day = max([s.today_to_par for s in full_stats])
+
+# Send the results to the API.
+for stats in full_stats:
   # Construct the payload for the request.
   raw_payload = {
     COL_IDS['name'] : stats.name,
@@ -153,6 +163,7 @@ for element in golfer_element_list:
     COL_IDS['round2'] : stats.rounds[1],
     COL_IDS['round3'] : stats.rounds[2],
     COL_IDS['round4'] : stats.rounds[3],
+#    COL_IDS['cut_adj'] : worst_of_day if stats.cut else 0,
   }
   payload = json.dumps(raw_payload, separators=(',', ':'))
 
