@@ -46,6 +46,9 @@ for game in matchups:
 
   # Game Information
   matchup_id = int(game.get('data-matchupid'))
+  game_date = game.find_class('pickem-date')[0].text_content().replace('Date: ', '')
+  game_time = game.find_class('pickem-time')[0].text_content().replace('Time: ', '')
+  game_datetime = "%s %s" % (game_date, game_time)
 
   # Team Information
   # Name
@@ -68,7 +71,11 @@ for game in matchups:
   away_record = records[0].text_content()
   home_record = records[1].text_content()
 
+  # Log for debugging
+  # Assert so we don't wipeout good data when an issue occurs
   log_and_assert(matchup_id, 'Matchup id')
+  log_and_assert(game_date, 'Date')
+  log_and_assert(game_time, 'Time')
   log_and_assert(away_team, 'Away team name')
   log_and_assert(home_team, 'Home team name')
   log_and_assert(away_team_percent, 'Away team percentage')
@@ -85,6 +92,7 @@ for game in matchups:
       {
         'cells': [
           {'column': 'Week', 'value': week_label},
+          {'column': 'Time', 'value': game_datetime},
           {'column': 'Matchup ID', 'value': matchup_id},
           {'column': 'Away', 'value': away_team},
           {'column': 'Away %', 'value': away_team_percent},
