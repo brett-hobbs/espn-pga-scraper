@@ -25,6 +25,12 @@ def log_and_assert(value, label):
     raise Exception('No value for %s' % label)
   print "%s: %s" % (label, value)
 
+def find_decendant(elem, classname, index=0):
+  return elem.find_class(classname)[index]
+
+def find_decendant_text(elem, classname, index=0):
+  elem = find_decendant(elem, classname, index)
+  return elem.text_content()
 
 ####################
 ## Start the script.
@@ -46,15 +52,15 @@ for game in matchups:
 
   # Game Information
   matchup_id = int(game.get('data-matchupid'))
-  game_date = game.find_class('pickem-date')[0].text_content().replace('Date: ', '')
-  game_time = game.find_class('pickem-time')[0].text_content().replace('Time: ', '')
+  game_date = find_decendant_text(game, 'pickem-date').replace('Date: ', '')
+  game_time = find_decendant_text(game, 'pickem-time').replace('Time: ', '')
   game_datetime = "%s %s" % (game_date, game_time)
 
   # Team Information
   # Name
   teams = game.find_class('pickem-team-name')
-  away_team = teams[0].find_class('link-text')[0].text_content()
-  home_team = teams[1].find_class('link-text')[0].text_content()
+  away_team = find_decendant_text(teams[0], 'link-text')
+  home_team = find_decendant_text(teams[1], 'link-text')
 
   # Percentages
   percentages = game.find_class('games-greenbar-pickem')
@@ -63,8 +69,8 @@ for game in matchups:
 
   # Logo
   images = game.find_class('pickem-teams')
-  away_img = images[0].find_class('opponentImage')[0].attrib['src']
-  home_img = images[1].find_class('opponentImage')[0].attrib['src']
+  away_img = find_decendant(images[0], 'opponentImage').attrib['src']
+  home_img = find_decendant(images[1], 'opponentImage').attrib['src']
 
   # Record
   records = game.find_class('pickem-team-record')
