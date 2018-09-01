@@ -9,13 +9,15 @@ import argparse
 # Command line arguments
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--secret', type=str, required=True,
-                    help='Key used to sign API requests.')
+                    help='Key used to authenticate API requests.')
 parser.add_argument('--espn_cookie', type=str, required=True,
                     help='Needed to make espn scraping requests.')
 parser.add_argument('--doc_id', type=str, required=True,
                     help='Coda document ID.')
 parser.add_argument('--table_id', type=str, required=True,
                     help='Coda table ID.')
+parser.add_argument('--dryrun', type=bool, default=False,
+                    help='Don not send API updates')
 args = parser.parse_args()
 
 ESPN_URL = 'http://fantasy.espn.com/college-football-pickem/2018/en/entry'
@@ -48,6 +50,8 @@ matchups = tree.find_class('matchupRow')
 if len(matchups) != 10:
   raise Exception('Unkown error expected 10 games and found %s' % len(matchups))
 
+rows = []
+
 for game in matchups:
 
   # Game Information
@@ -77,6 +81,24 @@ for game in matchups:
   away_record = records[0].text_content()
   home_record = records[1].text_content()
 
+  # Get the scores if the game has started
+  scores = game.find_class('opponent-score')
+  away_score = ''
+  home_score = ''
+  if scores:
+    away_score = scores[0].text_content()
+    home_score = scores[1].text_content()
+    log_and_assert(away_score, 'Away score')
+    log_and_assert(home_score, 'Home score')
+
+  # Get the winner if the game is over
+  winner = ''
+  if game.find_class('away winner'):
+    winner = away_team
+  if game.find_class('home winner'):
+    winner = home_team
+  print "Winner: %s" % winner
+
   # Log for debugging
   # Assert so we don't wipeout good data when an issue occurs
   log_and_assert(matchup_id, 'Matchup id')
@@ -93,27 +115,35 @@ for game in matchups:
 
   headers = {'Authorization': 'Bearer %s' % args.secret}
   uri = 'https://coda.io/apis/v1beta1/docs/%s/tables/%s/rows' % (args.doc_id, args.table_id)
-  payload = {
-    'rows': [
-      {
-        'cells': [
-          {'column': 'Week', 'value': week_label},
-          {'column': 'Time', 'value': game_datetime},
-          {'column': 'Matchup ID', 'value': matchup_id},
-          {'column': 'Away', 'value': away_team},
-          {'column': 'Away %', 'value': away_team_percent},
-          {'column': 'Away Image', 'value': away_img},
-          {'column': 'Away Record', 'value': away_record},
-          {'column': 'Home', 'value': home_team},
-          {'column': 'Home %', 'value': home_team_percent},
-          {'column': 'Home Image', 'value': home_img},
-          {'column': 'Home Record', 'value': home_record},
-        ],
-      },
-    ],
-    'keyColumns': ['Matchup ID'],
-  }
+  rows.append(
+    {
+      'cells': [
+        {'column': 'Week', 'value': week_label},
+        {'column': 'Time', 'value': game_datetime},
+        {'column': 'Matchup ID', 'value': matchup_id},
+        {'column': 'Away', 'value': away_team},
+        {'column': 'Away %', 'value': away_team_percent},
+        {'column': 'Away Image', 'value': away_img},
+        {'column': 'Away Record', 'value': away_record},
+        {'column': 'Home', 'value': home_team},
+        {'column': 'Home %', 'value': home_team_percent},
+        {'column': 'Home Image', 'value': home_img},
+        {'column': 'Home Record', 'value': home_record},
+        {'column': 'Winner', 'value': winner},
+      ],
+    }
+  )
 
+# Create payload for the API call
+payload = {
+  'rows': rows,
+  'keyColumns': ['Matchup ID'],
+}
+
+if not args.dryrun:
   req = requests.post(uri, headers=headers, json=payload)
   req.raise_for_status() # Throw if there was an error.
   res = req.json()
+else:
+  print '\nRunning in dryrun mode, payload:'
+  print payload
