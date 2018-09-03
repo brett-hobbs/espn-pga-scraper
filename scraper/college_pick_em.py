@@ -42,7 +42,7 @@ cookie = {'espn_s2': args.espn_cookie}
 page = requests.get(ESPN_URL, cookies=cookie)
 tree = html.fromstring(page.text)
 
-week_label = tree.find_class('sp-nav-listitem')[0].find_class('label name')[0].text_content()
+week_label = tree.find_class('sp-nav-listitem current')[0].find_class('label name')[0].text_content()
 log_and_assert(week_label, 'Week')
 
 # Get the list of match ups.
