@@ -47,8 +47,8 @@ log_and_assert(week_label, 'Week')
 
 # Get the list of match ups.
 matchups = tree.find_class('matchupRow')
-if len(matchups) != 10:
-  raise Exception('Unkown error expected 10 games and found %s' % len(matchups))
+#if len(matchups) != 10:
+#  raise Exception('Unkown error expected 10 games and found %s' % len(matchups))
 
 rows = []
 
